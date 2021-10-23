@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 import databases
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 from .lib.database import construct_db_url
 from .models.notes import GetNote, PutNote
@@ -84,11 +85,12 @@ async def create_note(note: PutNote) -> dict:
     print(note_id)
     return {**note.dict(), "id": note_id}
 
+@database.transaction()
 @app.put(
     "/notes/{note_id}",
     response_model = PutNote,
     status_code = status.HTTP_200_OK)
-def update_note(note_id: int, note: PutNote) -> dict:
+async def update_note(note_id: int, note: PutNote) -> dict:
     '''
     Update a note
     '''
@@ -96,7 +98,7 @@ def update_note(note_id: int, note: PutNote) -> dict:
         notes.c.id == note_id).values(
             text=note.text,
             completed = note.completed)
-    database.execute(query)
+    await database.execute(query)
     return {**note.dict(), "id": note_id}
 
 @database.transaction()
@@ -121,22 +123,26 @@ async def get_notes(skip: int=0, limit: int = 20) -> list:
     response_model = GetNote,
     status_code = status.HTTP_200_OK
     )
-def get_note(note_id: int) -> GetNote:
+async def get_note(note_id: int) -> GetNote:
     '''
     Get a note
     '''
     query = notes.select().where(notes.c.id == note_id)
-    return database.fetch_one(query)
+    response = await database.fetch_one(query)
+    return dict(response)
 
 @database.transaction()
 @app.delete(
     "/notes/{note_id}",
     status_code = status.HTTP_200_OK
     )
-def delete_note(note_id: int) -> dict:
+async def delete_note(note_id: int) -> dict:
     '''
     Deletes given note
     '''
     query = notes.delete().where(notes.c.id == note_id)
-    database.execute(query)
+    await database.execute(query)
     return {'message': f'Message with id {note_id} deleted'}
+
+if __name__ == "main":
+    uvicorn.run(app, host="0.0.0.0", port="8000", log_level="debug")
