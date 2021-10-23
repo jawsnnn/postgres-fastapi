@@ -1,26 +1,46 @@
 from os import putenv
 from fastapi import FastAPI, status
+from typing import List
 
 from dotenv import load_dotenv
 
 from fastapi.middleware.cors import CORSMiddleware
-from lib.database import create_database
-from lib.database import construct_db_url
-from lib.database import create_engine
-from lib.database import create_tables
-from models.notes import GetNote, PutNote
-
-app = FastAPI(title = "Demo FastAPI app running on postgresql")
+from .lib.database import construct_db_url
+from .models.notes import GetNote, PutNote
+import sqlalchemy
+from sqlalchemy.ext.asyncio import create_async_engine
+import databases
 
 load_dotenv()
 
 db_url = construct_db_url()
 
-database = create_database(db_url)
+print(db_url)
 
-engine = create_engine(db_url)
+database = databases.Database(db_url)
 
-dict_tables = create_tables(engine)
+engine = create_async_engine(
+    db_url, echo = True)
+
+
+metadata = sqlalchemy.MetaData()
+
+# Tables
+notes = sqlalchemy.Table(
+    "notes",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("text", sqlalchemy.String(255)),
+    sqlalchemy.Column("completed", sqlalchemy.Boolean),
+    schema="sample_schema"
+)
+
+async def create_tables():
+
+    async with engine.begin() as conn:
+        await conn.run_sync(metadata.create_all)
+
+app = FastAPI(title = "Demo FastAPI app running on postgresql")
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,14 +56,16 @@ async def startup() -> None:
     Startup the app by connecting to the database
     '''
     await database.connect()
+    await create_tables()
 
-@app.on_evnet("shutdown")
+@app.on_event("shutdown")
 async def shutdown() -> None:
     '''
     Shutdown the app by closing the database connection
     '''
     await database.disconnect()
 
+@database.transaction()
 @app.post(
     "/notes/", 
     response_model = PutNote, 
@@ -52,56 +74,56 @@ async def create_note(note: PutNote) -> dict:
     '''
     Create a note
     '''
-    notes = dict_tables.get("notes")
     query = notes.insert().values(text=note.text, completed = note.completed)
     note_id = await database.execute(query)
+    print(note_id)
     return {**note.dict(), "id": note_id}
 
 @app.put(
     "/notes/{note_id}",
     response_model = PutNote,
     status_code = status.HTTP_200_OK)
-async def update_note(note_id: int, note: PutNote) -> dict:
+def update_note(note_id: int, note: PutNote) -> dict:
     '''
     Update a note
     '''
-    notes = dict_tables.get("notes")
     query = notes.update().where(notes.c.id == note_id).values(text=note.text, completed = note.completed)
-    await database.execute(query)
+    database.execute(query)
     return {**note.dict(), "id": note_id}
 
+@database.transaction()
 @app.get(
     "/notes/",
-    response_model = GetNote,
+    response_model = List[GetNote],
     status_code = status.HTTP_200_OK
     )
-async def get_notes(skip: int=0, limit: int = 20) -> list:
+async def get_notes(skip: int=0, limit: int = 20):
     '''
     Get all notes
     '''
-    notes = dict_tables.get("notes")
     query = notes.select().offset(skip).limit(limit)
-    return await database.fetch_all(query)
+    response = await database.fetch_all(query)
+    response = [ dict(i.items()) for i in response ]
+    print(response)
+    return response
 
 @app.get(
     "/notes/{note_id}",
     response_model = GetNote,
     status_code = status.HTTP_200_OK
     )
-async def get_ntoe(note_id: int) -> GetNote:
+def get_note(note_id: int) -> GetNote:
     '''
     Get a note
     '''
-    notes = dict_tables.get("notes")
     query = notes.select().where(notes.c.id == note_id)
-    return await database.fetch_one(query)
+    return database.fetch_one(query)
 
 @app.delete(
     "/notes/{note_id}",
     status_code = status.HTTP_200_OK
     )
-async def delete_note(note_id: int) -> dict:
-    notes = dict_tables.get("notes")
+def delete_note(note_id: int) -> dict:
     query = notes.delete().where(notes.c.id == note_id)
-    await database.execute(query)
+    database.execute(query)
     return {'message': f'Message with id {note_id} deleted'}
