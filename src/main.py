@@ -8,7 +8,7 @@ from lib.database import create_database
 from lib.database import construct_db_url
 from lib.database import create_engine
 from lib.database import create_tables
-from lib.models import GetNote, PutNote
+from models.notes import GetNote, PutNote
 
 app = FastAPI(title = "Demo FastAPI app running on postgresql")
 
