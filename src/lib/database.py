@@ -6,6 +6,7 @@ Library for database functions
 import os
 from typing import Protocol
 import databases
+from sqlalchemy.ext.asyncio import create_async_engine
 import sqlalchemy
 
 def construct_db_url() -> str:
@@ -18,7 +19,7 @@ def construct_db_url() -> str:
     password = os.environ.get("DATABASE_PASSWORD")
     port_number = os.environ.get("DATABASE_PORT")
     ssl_mode = os.environ.get("DATABASE_SSL_MODE")
-    return f"postgresql://{user_name}:{password}@{db_host_name}:{port_number}/{database_name}?ssl_mode={ssl_mode}"    
+    return f"postgresql+asyncpg://{user_name}:{password}@{db_host_name}:{port_number}/{database_name}?ssl_mode={ssl_mode}"    
     
 def create_database(db_url : str) -> databases.Database:
     """
@@ -29,15 +30,15 @@ def create_database(db_url : str) -> databases.Database:
     return database
 
 
-def create_engine(db_url : str) -> sqlalchemy.engine.Engine:
-    engine = sqlalchemy.create_engine(
+def create_engine(db_url : str) -> sqlalchemy.ext.asyncio.AsyncEngine:
+    engine = create_async_engine(
         db_url, 
         pool_size=3,
         max_overflow=0)
 
     return engine
 
-def create_tables(engine : sqlalchemy.engine.Engine) -> None:
+def create_tables(engine : sqlalchemy.ext.asyncio.AsyncEngine) -> dict:
     """
     Creates all tables in the database
     """
@@ -51,3 +52,7 @@ def create_tables(engine : sqlalchemy.engine.Engine) -> None:
         sqlalchemy.Column("text", sqlalchemy.String(255)),
         sqlalchemy.Column("completed"), sqlalchemy.Boolean
     )
+
+    return {
+        "notes": notes
+    }
