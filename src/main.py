@@ -4,14 +4,18 @@ from dotenv import load_dotenv
 
 from fastapi.middleware.cors import CORSMiddleware
 from lib.database import create_database
+from lib.database import construct_db_url
+from lib.database import create_engine
 
 app = FastAPI(title = "Demo FastAPI app running on postgresql")
 
 load_dotenv()
 
-database = create_database()
+db_url = construct_db_url()
 
+database = create_database(db_url)
 
+engine = create_engine(db_url)
 
 app.add_middleware(
     CORSMiddleware,

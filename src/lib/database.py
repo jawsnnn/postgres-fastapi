@@ -8,8 +8,6 @@ from typing import Protocol
 import databases
 import sqlalchemy
 
-metadata = sqlalchemy.MetaData()
-
 def construct_db_url() -> str:
     """
     Constructs a database url from environment variables
@@ -31,18 +29,25 @@ def create_database(db_url : str) -> databases.Database:
     return database
 
 
-engine = sqlalchemy.create_engine(
-    construct_db_url(), 
-    pool_size=3,
-    max_overflow=0)
+def create_engine(db_url : str) -> sqlalchemy.engine.Engine:
+    engine = sqlalchemy.create_engine(
+        db_url, 
+        pool_size=3,
+        max_overflow=0)
 
-metadata.create_all(engine)
+    return engine
 
-# Tables
-notes = sqlalchemy.Table(
-    "notes",
-    metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("text", sqlalchemy.String(255)),
-    sqlalchemy.Column("completed"), sqlalchemy.Boolean
-)
+def create_tables(engine : sqlalchemy.engine.Engine) -> None:
+    """
+    Creates all tables in the database
+    """
+    metadata = sqlalchemy.MetaData()
+
+    # Tables
+    notes = sqlalchemy.Table(
+        "notes",
+        metadata,
+        sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+        sqlalchemy.Column("text", sqlalchemy.String(255)),
+        sqlalchemy.Column("completed"), sqlalchemy.Boolean
+    )
