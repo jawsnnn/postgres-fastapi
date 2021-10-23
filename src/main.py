@@ -1,15 +1,18 @@
-from os import putenv
-from fastapi import FastAPI, status
+# pylint: disable=import-error
+'''
+FastAPI postgresql backend
+'''
 from typing import List
 
 from dotenv import load_dotenv
-
-from fastapi.middleware.cors import CORSMiddleware
-from .lib.database import construct_db_url
-from .models.notes import GetNote, PutNote
 import sqlalchemy
 from sqlalchemy.ext.asyncio import create_async_engine
 import databases
+from fastapi import FastAPI, status
+from fastapi.middleware.cors import CORSMiddleware
+
+from .lib.database import construct_db_url
+from .models.notes import GetNote, PutNote
 
 load_dotenv()
 
@@ -35,8 +38,10 @@ notes = sqlalchemy.Table(
     schema="sample_schema"
 )
 
-async def create_tables():
-
+async def create_tables() -> None:
+    '''
+    Creates all tables
+    '''
     async with engine.begin() as conn:
         await conn.run_sync(metadata.create_all)
 
@@ -67,8 +72,8 @@ async def shutdown() -> None:
 
 @database.transaction()
 @app.post(
-    "/notes/", 
-    response_model = PutNote, 
+    "/notes/",
+    response_model = PutNote,
     status_code = status.HTTP_201_CREATED)
 async def create_note(note: PutNote) -> dict:
     '''
@@ -87,7 +92,10 @@ def update_note(note_id: int, note: PutNote) -> dict:
     '''
     Update a note
     '''
-    query = notes.update().where(notes.c.id == note_id).values(text=note.text, completed = note.completed)
+    query = notes.update().where(
+        notes.c.id == note_id).values(
+            text=note.text,
+            completed = note.completed)
     database.execute(query)
     return {**note.dict(), "id": note_id}
 
@@ -97,7 +105,7 @@ def update_note(note_id: int, note: PutNote) -> dict:
     response_model = List[GetNote],
     status_code = status.HTTP_200_OK
     )
-async def get_notes(skip: int=0, limit: int = 20):
+async def get_notes(skip: int=0, limit: int = 20) -> list:
     '''
     Get all notes
     '''
@@ -107,6 +115,7 @@ async def get_notes(skip: int=0, limit: int = 20):
     print(response)
     return response
 
+@database.transaction()
 @app.get(
     "/notes/{note_id}",
     response_model = GetNote,
@@ -119,11 +128,15 @@ def get_note(note_id: int) -> GetNote:
     query = notes.select().where(notes.c.id == note_id)
     return database.fetch_one(query)
 
+@database.transaction()
 @app.delete(
     "/notes/{note_id}",
     status_code = status.HTTP_200_OK
     )
 def delete_note(note_id: int) -> dict:
+    '''
+    Deletes given note
+    '''
     query = notes.delete().where(notes.c.id == note_id)
     database.execute(query)
     return {'message': f'Message with id {note_id} deleted'}
