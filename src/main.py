@@ -11,6 +11,7 @@ import databases
 from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import socketio
 
 from .lib.database import construct_db_url
 from .models.notes import GetNote, PutNote
@@ -48,6 +49,9 @@ async def create_tables() -> None:
 
 app = FastAPI(title = "Demo FastAPI app running on postgresql")
 
+sio = socketio.AsyncServer(cors_allowed_origins="*", async_mode="asgi")
+sock_app = socketio.ASGIApp(sio, app)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -63,6 +67,21 @@ async def startup() -> None:
     '''
     await database.connect()
     await create_tables()
+
+@sio.event
+async def connect(sid, environ) -> None:
+    '''
+    SocketIO connect event
+    '''
+    print("connect ", sid)
+
+@sio.event
+async def disconnect(sid) -> None:
+    '''
+    SocketIO disconnect event
+    '''
+    print("disconnect ", sid)
+
 
 @app.on_event("shutdown")
 async def shutdown() -> None:
@@ -82,6 +101,7 @@ async def create_note(note: PutNote) -> dict:
     '''
     query = notes.insert().values(text=note.text, completed = note.completed)
     note_id = await database.execute(query)
+    await sio.emit('create_note', {'id': note_id})
     print(note_id)
     return {**note.dict(), "id": note_id}
 
